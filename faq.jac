@@ -34,6 +34,45 @@ graph faq {
 
 walker init {
     root {
-        spawn here ++> graph::faq;
+        // spawn here ++> graph::faq;
+        // spawn here walker::ask;
+
+        spawn here ++> node::faq_root;
+        spawn here walker::ingest_faq(kb_file="tesla_faq.json");
+        spawn here walker::ask;
+    }
+}
+
+walker ask {
+    can use.qa_classify;
+    has question;
+    root {
+        question = std.input("AMA > ");
+        take --> node::faq_root;
+    }
+    faq_root {
+        answers = -->.answer;
+        best_answer = use.qa_classify(
+            text = question,
+            classes = answers
+        );
+        take --> node::faq_state(answer==best_answer["match"]);
+        // take --> node::faq_state(question==question);
+    }
+    faq_state {:
+        std.out(here.answer);
+    }
+}
+
+walker ingest_faq {
+    has kb_file;
+    root: take --> node::faq_root;
+    faq_root {
+        kb = file.load_json(kb_file);
+        for faq in kb {
+            question = faq["question"];
+            answer = faq["answer"];
+            spawn here ++> node::faq_state(question=question, answer=answer);
+        }
     }
 }
